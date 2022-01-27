@@ -155,9 +155,11 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="src\img\awesomeface.png" />
+    <Image Include="src\img\cirnoprism.jpg" />
     <Image Include="src\img\container.jpg" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Camera.h" />
     <ClInclude Include="src\shader_s.h" />
   </ItemGroup>
   <ItemGroup>

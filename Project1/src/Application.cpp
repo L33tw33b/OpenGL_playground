@@ -7,15 +7,27 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "shader_s.h"
-
+#include "Camera.h"
 #include <iostream>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
+
+//Camera Settings
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+float lastX = SCR_WIDTH / 2.0f;
+float lastY = SCR_HEIGHT / 2.0f;
+bool firstMouse = true;
+
+// timing
+float deltaTime = 0.2f;	// time between current frame and last frame
+float lastFrame = 0.0f;
 
 int main()
 {
@@ -25,6 +37,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
 
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -42,6 +55,9 @@ int main()
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
+    //Set mouse callback
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, scroll_callback);
     // glad: load all OpenGL function pointers
     // ---------------------------------------
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
@@ -54,6 +70,10 @@ int main()
     // ------------------------------------
     Shader ourShader("src/5.1.transform.vert", "src/5.1.transform.frag");
 
+    //Enable mouse
+    // ------------------------------------
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float vertices[] = {
@@ -101,8 +121,49 @@ int main()
     -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
     };
     unsigned int indices[] = {
-        0, 1, 3, // first triangle
+        0, 1, 2, // first triangle
         1, 2, 3  // second triangle
+    };
+    float cirnoium[]{
+    // Triangle 1
+    0.0,1.0,0.0,
+    0.5,1.0,
+
+    -1.0,-1.0,1.0,
+    1.0,0.0,
+
+    1.0,-1.0,1.0,
+    0.0,0.0,
+
+    //Triangle 2
+    0.0,1.0,0.0,
+    0.5,1.0,
+
+    1.0,-1.0,1.0,
+    1.0,0.0,
+
+    1.0,-1.0,-1.0,
+    0.0,0.0,
+
+    //Triangle 3
+    0.0,1.0,0.0,
+    0.5,1.0,
+
+    1.0,-1.0,-1.0,
+    1.0,0.0,
+
+    -1.0,-1.0,-1.0,
+    0.0,0.0,
+
+    //Triangle 4
+    0.0,1.0,0.0,
+    0.5,1.0,
+
+    -1.0,-1.0,-1.0,
+    1.0,0.0,
+
+    -1.0,-1.0,1.0,
+    0.0,0.0,
     };
     glm::vec3 cubePositions[] = {
         glm::vec3(0.0f,  0.0f,  0.0f),
@@ -124,7 +185,7 @@ int main()
     glBindVertexArray(VAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cirnoium), cirnoium, GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
@@ -132,6 +193,7 @@ int main()
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
+
     // texture coord attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
@@ -140,20 +202,24 @@ int main()
     // load and create a texture 
     // -------------------------
     unsigned int texture1, texture2;
+
     // texture 1
     // ---------
     glGenTextures(1, &texture1);
     glBindTexture(GL_TEXTURE_2D, texture1);
+
     // set the texture wrapping parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
     // set texture filtering parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
     // load image, create texture and generate mipmaps
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
-    unsigned char* data = stbi_load("src/img/container.jpg", &width, &height, &nrChannels, 0);
+    unsigned char* data = stbi_load("src/img/cirnoprism.jpg", &width, &height, &nrChannels, 0);
     if (data)
     {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
@@ -168,12 +234,15 @@ int main()
     // ---------
     glGenTextures(1, &texture2);
     glBindTexture(GL_TEXTURE_2D, texture2);
+
     // set the texture wrapping parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
     // set texture filtering parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
     // load image, create texture and generate mipmaps
     data = stbi_load("src/img/awesomeface.png", &width, &height, &nrChannels, 0);
     if (data)
@@ -194,7 +263,8 @@ int main()
 
 
     ourShader.setInt("texture1", 0);
-    ourShader.setInt("texture2", 1);
+    //ourShader.setInt("texture2", 1);
+
 
 
     // render loop
@@ -214,6 +284,7 @@ int main()
         // bind textures on corresponding texture units
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture1);
+
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, texture2);
 
@@ -225,36 +296,45 @@ int main()
         // get matrix's uniform location and set matrix
         //unsigned int transformLoc = glGetUniformLocation(ourShader.ID, "transform");
         //glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(transform));
+
         ourShader.use();
-        //glm::mat4 model = glm::mat4(1.0f);
-        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 model = glm::mat4(1.0f);  
+        glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 projection;
 
-        //model = glm::rotate(model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.0f, 0.2f, 0.2f));
+        model = glm::rotate(model, (float)glfwGetTime() * glm::radians(45.0f), glm::vec3(0.0f, 0.2f, 0.0f));
+
         view = glm::translate(view, glm::vec3(0.0f, 0.0f, -5.0f));
-        projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+        ourShader.setMat4("view", view);
+
+        projection = glm::perspective(glm::radians(camera.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
+        ourShader.setMat4("projection", projection);
+
         int modelLoc = glGetUniformLocation(ourShader.ID, "model");
         int viewLoc = glGetUniformLocation(ourShader.ID, "view");
         
-        //glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-        ourShader.setMat4("projection", projection);
+        
 
 
         //model = glm::rotate(model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
         glDrawArrays(GL_TRIANGLES, 0, 36);
         // render container
         glBindVertexArray(VAO);
-        for (unsigned int i = 0; i < 10; i++)
+
+        /*Render 10 cubes
+        /for (unsigned int i = 1; i < 10; i++)
         {
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, cubePositions[i]);
+            model = glm::translate(model, glm::vec3(sin(glfwGetTime()) * cubePositions[i][0], cubePositions[i][1], cos(glfwGetTime()) * cubePositions[i][2]));
             float angle = 20.0f * i;
-            model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f) * (float)glfwGetTime());
+            model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
             ourShader.setMat4("model", model);
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
-        }
+        }*/
+
        // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 
@@ -282,11 +362,23 @@ void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-    //if(glfwGetKey(window,GLFW_KEY_D) == GLFW_REPEAT)
-        //view = glm::translate(view, glm::vec3(0.0f, 0.0f, -5.0f));
 
-    
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.ProcessKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.ProcessKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.ProcessKeyboard(LEFT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        camera.ProcessKeyboard(UP, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
+        camera.ProcessKeyboard(DOWN, deltaTime);
 }
+
+
+  
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
@@ -295,4 +387,29 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
+}
+
+// glfw: listen to mouse inputs
+// ---------------------------------------------------------------------------------------------
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos;
+
+    lastX = xpos;
+    lastY = ypos;
+
+    camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
